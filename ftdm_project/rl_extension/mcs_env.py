@@ -68,6 +68,7 @@ class MCSEnv:
         alpha:      float = 1.0,    # GRQI 提升权重
         beta:       float = 0.05,   # 能耗惩罚权重
         gamma:      float = 0.1,    # 公平性奖励权重
+        use_anchor: bool  = True,   # 是否将锚点分纳入状态（消融实验开关）
     ):
         """
         Args:
@@ -87,12 +88,14 @@ class MCSEnv:
         self.P        = p_size
         self.K_total  = k_total
         self.k_ft     = k_finetune
-        self.alpha    = alpha
-        self.beta     = beta
-        self.gamma    = gamma
+        self.alpha      = alpha
+        self.beta       = beta
+        self.gamma      = gamma
+        self.use_anchor = use_anchor
 
         self.N          = len(D_U_pool)
-        self.state_dim  = 5 * self.P + 2   # 升级：+P 维锚点分
+        # 锚点分开关：启用时 5*P+2，关闭时 4*P+2（消融对照组）
+        self.state_dim  = (5 if use_anchor else 4) * self.P + 2
         self.action_dim = 2 * self.P
 
         # episode 内变量（reset 时重新采样/初始化）
@@ -248,15 +251,12 @@ class MCSEnv:
         dw_std  = (self._D_W_eff.std(axis=1)
                    / (self._dw_std_global + 1e-8)).astype(np.float32)
 
-        state = np.concatenate([
-            is_uav,
-            is_enh,
-            dw_mean,
-            dw_std,
-            self._anchor_scores,                          # 新增：锚点价值分
-            [self._budget / self.K_total],
-            [float(np.clip(self._grqi, -1.0, 1.0))],
-        ])
+        parts = [is_uav, is_enh, dw_mean, dw_std]
+        if self.use_anchor:
+            parts.append(self._anchor_scores)   # 实验组：含锚点先验
+        parts += [[self._budget / self.K_total],
+                  [float(np.clip(self._grqi, -1.0, 1.0))]]
+        state = np.concatenate(parts)
         return torch.from_numpy(state.astype(np.float32))
 
     def _is_done(self) -> bool:
