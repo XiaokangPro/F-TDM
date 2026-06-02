@@ -85,7 +85,8 @@ def main(args):
         k_finetune = 1,         # RL 训练快速模式
     )
     print(f"  环境: P={P_SIZE} PoI, Budget={K_TOTAL} units")
-    print(f"  状态维度: {env.state_dim}, 动作维度: {env.action_dim}")
+    print(f"  状态维度: {env.state_dim} (5×P+2), 动作维度: {env.action_dim}")
+    print(f"  奖励权重: α={env.alpha}(GRQI)  β={env.beta}(能耗)  γ={env.gamma}(公平性)")
 
     # 计算零分配基线 GRQI（无 UAV，无增强）
     baseline_grqi = compute_grqi_baseline(
@@ -99,9 +100,17 @@ def main(args):
 
     if args.load_rl and os.path.exists(RL_SAVE_PATH):
         print(f"\n[4] 加载已训练 DQN: {RL_SAVE_PATH}")
-        agent = DQNAgent(env.state_dim, env.action_dim)
-        agent.load(RL_SAVE_PATH)
-        grqi_log = reward_log = []
+        # 检查维度兼容性（state_dim 升级后旧模型不可直接复用）
+        ckpt = torch.load(RL_SAVE_PATH, map_location='cpu')
+        saved_dim = ckpt['q_net']['fc1.weight'].shape[1]
+        if saved_dim != env.state_dim:
+            print(f"  旧模型输入维度 {saved_dim} ≠ 当前 {env.state_dim}（已升级锚点特征）")
+            print("  忽略旧模型，重新训练...")
+            args.load_rl = False
+        else:
+            agent = DQNAgent(env.state_dim, env.action_dim)
+            agent.load(RL_SAVE_PATH)
+            grqi_log = reward_log = []
     else:
         print(f"\n[4] 训练 DQN ({n_episodes} episodes)...")
         agent, grqi_log, reward_log = train_dqn(env, n_episodes=n_episodes)

@@ -77,30 +77,30 @@ def run_episode_greedy_uncertainty(env) -> Dict:
     直觉：高不确定性 PoI 的人类数据质量差，UAV 标定收益最大。
     这是常见的主动学习（Active Learning）策略。
     """
+    from rl_extension.anchor import compute_anchor_scores
+
     P     = env.P
     state = env.reset()
     done  = False
     total_reward = 0.0
 
-    # 预计算每个 PoI 的人类读数方差（越高越需要 UAV）
-    dw_std = env._D_W.std(axis=1)   # (P,)
+    # 用综合锚点分（方差+冲突度+偏离均值）替代原始标准差
+    # 对应论文创新点一："量化分析多维感知数据的方差与冲突度"
+    anchor_scores = compute_anchor_scores(env._D_W)   # (P,)，越高越应优先 UAV
 
     while not done:
         mask  = env.get_valid_mask()
 
-        # 优先选 UAV 动作
+        # 优先选 UAV 动作：锚点分最高的 PoI 最需要 UAV 校验
         uav_valid = [i for i in range(P) if mask[i]]
         if uav_valid:
-            # 选方差最大的未访问 PoI 做 UAV 分配
-            stds = [(dw_std[i], i) for i in uav_valid]
-            action = max(stds, key=lambda x: x[0])[1]
+            action = max(uav_valid, key=lambda i: anchor_scores[i])
         else:
-            # UAV 预算耗尽，转用参与者增强（同样选方差最大的）
+            # UAV 预算耗尽，转用参与者增强，同样选锚点分最高的
             part_valid = [i - P for i in range(P, 2*P) if mask[i]]
             if not part_valid:
                 break
-            stds = [(dw_std[i], i) for i in part_valid]
-            action = max(stds, key=lambda x: x[0])[1] + P
+            action = max(part_valid, key=lambda i: anchor_scores[i]) + P
 
         state, reward, done, info = env.step(action)
         total_reward += reward
