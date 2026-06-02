@@ -1,0 +1,14 @@
+# F-TDM 项目依赖
+# 安装命令：pip install -r requirements.txt
+#
+# 论文实验环境（Section VI-A-3）：
+#   Python 3.7, PyTorch 1.2.0
+#   Ubuntu 18.04, Intel Xeon Gold 5122 CPU, 62GB RAM
+#   4× Nvidia GeForce RTX 2080Ti
+#
+# 本项目兼容 Python 3.8+ / PyTorch 1.x ~ 2.x
+
+torch>=1.8.0          # 核心深度学习框架（论文用 1.2.0，现代版本均可）
+numpy>=1.19.0         # 数值计算
+pandas>=1.2.0         # 数据集加载与处理
+openpyxl>=3.0.0       # 读取 .xlsx 格式（UCI 原始数据为 xlsx）
