@@ -68,7 +68,9 @@ class MCSEnv:
         alpha:      float = 1.0,    # GRQI 提升权重
         beta:       float = 0.05,   # 能耗惩罚权重
         gamma:      float = 0.1,    # 公平性奖励权重
-        use_anchor: bool  = True,   # 是否将锚点分纳入状态（消融实验开关）
+        use_anchor:    bool  = True,   # 是否将锚点分纳入状态（消融实验开关）
+        fixed_subset:  bool  = False,  # True=固定训练子集，False=每轮随机采样
+        fixed_indices: np.ndarray = None,  # 外部指定固定子集下标（None则自动取前P个）
     ):
         """
         Args:
@@ -88,12 +90,22 @@ class MCSEnv:
         self.P        = p_size
         self.K_total  = k_total
         self.k_ft     = k_finetune
-        self.alpha      = alpha
-        self.beta       = beta
-        self.gamma      = gamma
-        self.use_anchor = use_anchor
+        self.alpha         = alpha
+        self.beta          = beta
+        self.gamma         = gamma
+        self.use_anchor    = use_anchor
+        self.fixed_subset  = fixed_subset
 
-        self.N          = len(D_U_pool)
+        self.N = len(D_U_pool)
+
+        # 固定子集逻辑：一次性确定，reset 时重复使用
+        if fixed_subset:
+            if fixed_indices is not None:
+                self._fixed_idx = np.asarray(fixed_indices, dtype=int)
+            else:
+                self._fixed_idx = np.arange(min(p_size, self.N))
+        else:
+            self._fixed_idx = None
         # 锚点分开关：启用时 5*P+2，关闭时 4*P+2（消融对照组）
         self.state_dim  = (5 if use_anchor else 4) * self.P + 2
         self.action_dim = 2 * self.P
@@ -117,9 +129,12 @@ class MCSEnv:
 
     def reset(self) -> torch.Tensor:
         """开始新 episode：采样 P 个 PoI 子集，重置状态，计算初始 GRQI/公平度/锚点分。"""
-        self._poi_idx = np.random.choice(self.N, self.P, replace=False)
-        self._D_W     = self.D_W_pool[self._poi_idx].copy()
-        self._D_U     = self.D_U_pool[self._poi_idx].copy()
+        if self.fixed_subset:
+            self._poi_idx = self._fixed_idx
+        else:
+            self._poi_idx = np.random.choice(self.N, self.P, replace=False)
+        self._D_W = self.D_W_pool[self._poi_idx].copy()
+        self._D_U = self.D_U_pool[self._poi_idx].copy()
         self._D_W_eff = self._D_W.copy()
 
         self._uav_visited: List[int] = []
