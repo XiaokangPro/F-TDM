@@ -28,6 +28,7 @@ ftdm_project/data/_tmp*
 # 本地文档（仅本地保留，不上传）
 A Coverage-Aware High-Quality Sensing Data.pdf
 论文开题.md
+记录.md
 
 # 操作系统文件
 .DS_Store
